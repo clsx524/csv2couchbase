@@ -58,17 +58,23 @@ class CouchbaseWriter(couchmigrator.migrator.Writer):
 
         # todo: use server username/password to query the bucket password/port if needed
         #self.server = "http://%s:%s/pools/default" % (self.host, self.port)
-        self.client = Couchbase.connect(bucket=self.bucket, host=self.host, username='clsx524', password='111111')
+        self.client = Couchbase.connect(bucket=self.bucket, host=self.host, username=self.username, password=self.password)
 
     def write(self, record):
-        if self.type == "usage":
+        def set (value, record, name): 
+            if not name in value or value[name] == record[name]:
+                value[name] = record[name]
+            else:
+                raise ValueError(name + " is different! " + "old value is " + value[name] + " new value is " + record[name])
+
+        if self.type == "taskusage":
             try:
                 self.client.add(str(record["id"]), record["Attributes"])
                 print "id = %s" % record["id"]
             except KeyExistsError:
                 raise KeyExistsError("Key has existed.")
                 
-        elif self.type == "event":
+        elif self.type == "taskevent":
             try:
                 value = self.client[record["id"]].value   
             except NotFoundError:
@@ -77,12 +83,94 @@ class CouchbaseWriter(couchmigrator.migrator.Writer):
                 self.client.add(record["id"], value)
             finally:
                 value["count"] = value["count"] + 1
-                value[value["count"]] = record["Attributes"]
+                arr = ["taskID", "jobID", "userName", "schedulingClass"]
+                for var in arr:
+                    set(value, record, var)
+
+                value[value["count"]] = {"priority":record["priority"], "reqCPU":record["reqCPU"], "reqRAM":record["reqRAM"], "reqDisk":record["reqDisk"], "MachCont":record["MachCont"], "timeStamp":record["timeStamp"], "eventType":record["eventType"], "machineID":record["machineID"]}
+
                 self.client.replace(record["id"], value)
-                print "id = %s" % (record["id"])
+
+        elif self.type == "jobevent":
+            try:
+                value = self.client[record["id"]].value  
+            except NotFoundError:
+                value = dict()
+                value["count"] = 0
+                self.client.add(record["id"], value)
+            finally:
+                value["count"] = value["count"] + 1
+                arr = ["jobID", "userName", "jobName", "logicJobName"]
+                for var in arr:
+                    if var in value and value[var] != record[var]:
+                        raise ValueError(var + " is different! " + "old value is " + value[var] + " new value is " + record[var])
+                    set(value, record, var)
+
+                value[value["count"]] = {"schedulingClass":record["schedulingClass"], "timeStamp":record["timeStamp"], "eventType":record["eventType"]}
+
+                self.client.replace(record["id"], value)
+
+        elif self.type == "machattrib":
+            try:
+                value = self.client[record["id"]].value  
+            except NotFoundError:
+                value = dict()
+                value["count"] = 0
+                self.client.add(record["id"], value)
+            finally:
+                value["count"] = value["count"] + 1
+                #arr = ["machineID", "userName", "jobName", "logicJobName"]
+                #for var in arr:
+                #    if var in value and value[var] != record[var]:
+                #        raise ValueError(var + " is different! " + "old value is " + value[var] + " new value is " + record[var])
+                #    set(value, record, var)
+
+                value[value["count"]] = {"timeStamp":record["timeStamp"], "attributeName":record["attributeName"], "attributeVal":record["attributeVal"], "attributeDel":record["attributeDel"]}
+
+                self.client.replace(record["id"], value)
+
+        elif self.type == "machineevent":
+            # try:
+            #     self.client.add(str(record["id"]), record["Attributes"])
+            #     print "id = %s" % record["id"]
+            # except KeyExistsError:
+            #     raise KeyExistsError("Key has existed.")
+
+
+            try:
+                value = self.client[record["id"]].value  
+            except NotFoundError:
+                value = dict()
+                value["count"] = 0
+                self.client.add(record["id"], value)
+            finally:
+                value["count"] = value["count"] + 1
+                arr = ["machineID"]
+                for var in arr:
+                    if var in value and value[var] != record[var]:
+                        raise ValueError(var + " is different! " + "old value is " + value[var] + " new value is " + record[var])
+                    set(value, record, var)
+
+                value[value["count"]] = {"timeStamp":record["timeStamp"], "platformID":record["platformID"], "eventType":record["eventType"], "capCPU":record["capCPU"], "capMem":record["capMem"]}
+
+                self.client.replace(record["id"], value)
+
+        elif self.type == "taskconstraint":
+            try:
+                value = self.client[record["id"]].value   
+            except NotFoundError:
+                value = dict()
+                value["count"] = 0
+                self.client.add(record["id"], value)
+            finally:
+                value["count"] = value["count"] + 1
+                arr = ["taskID", "jobID"]
+                for var in arr:
+                    set(value, record, var)
+
+                value[value["count"]] = {"attributeName":record["attributeName"], "compareOperator":record["compareOperator"], "attributeVal":record["attributeVal"], "timeStamp":record["timeStamp"]}
+
+                self.client.replace(record["id"], value)
 
         else:
             raise SyntaxError("Unknown Type of Table" + self.type)
-
-    #def close(self):
-    #    self.client.done()

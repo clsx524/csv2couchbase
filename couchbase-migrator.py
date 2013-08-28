@@ -90,12 +90,15 @@ class Config(object):
         self.verbose = False
         self.quiet = False
         self.type = ''
+        self.start = ''
+        self.end = ''
+        self.all = ''
 
 def parse_args(argv):
     config = Config()
     try:
         opts, args = getopt.getopt(argv[1:],
-                                     'hs:d:t:ovq', [
+                                     'hs:d:t:b:a:e:ovq', [
                 'help',
                 'source=',
                 'destination=',
@@ -103,7 +106,10 @@ def parse_args(argv):
                 'dry-run',
                 'verbose',
                 'quiet',
-                'type'
+                'type',
+                'start',
+                'end',
+                'all'
                 ])
         for o, a in opts:
             if o == '-h' or o == '--help':
@@ -114,6 +120,12 @@ def parse_args(argv):
                 config.destination = a
             elif o == '-t' or o == '--type':
                 config.type = a
+            elif o == '-b' or o == '--begin':
+                config.start = a
+            elif o == '-e' or o == '--end':
+                config.end = a
+            elif o == '-a' or o == '--all':
+                config.all = a
             elif o == '-o' or o == '--overwrite':
                 config.overwrite = True
             elif o == '--dry-run':
@@ -122,7 +134,7 @@ def parse_args(argv):
                 config.verbose = True
             elif o == '-q' or o == '--quiet':
                 config.quiet = True
-
+            
         msg = ""
         if not config.source or not config.destination:
             usage("missing source or destination")
@@ -137,16 +149,29 @@ def parse_args(argv):
 
 if __name__ == "__main__":
     config = parse_args(sys.argv)
-
+    sourcePrefix = "/home/xz93/clusterdata-2011-1/" + config.source + "/part-"
+    if config.all == '500':
+        sourceSuffix = "-of-00500.csv"
+    else:
+        sourceSuffix = "-of-00001.csv"
+        
     count = 0
 
-    reader = couchmigrator.reader(config.source, config.type)
-    writer = couchmigrator.writer(config.destination, config.type)
-    for record in reader:
-        writer.write(record)
-        count += 1
+    log = open('log.txt', 'w')
 
-    reader.close()
-    writer.close()
+    for var in range(int(config.start), int(config.end)):
+        num = str(var)
+        config.source = "csv:" + sourcePrefix + '0'*(5-len(num)) + num + sourceSuffix;
+        reader = couchmigrator.reader(config.source, config.type)
+        writer = couchmigrator.writer(config.destination, config.type)
+        for record in reader:
+            #print "file number: " + num + " id = " + record["id"]
+            log.write("file number: " + num + " id = " + record["id"] + '\n')
+            writer.write(record)
+            count += 1
+
+        reader.close()
+        writer.close()
 
     print 'migrated %d items' % count
+    log.close()
